@@ -8,6 +8,7 @@ from sensor_msgs.msg import JointState, CompressedImage
 import os
 import numpy as np
 import cv2
+import struct
 
 
 class RGBDExporter:
@@ -90,24 +91,30 @@ class RGBDExporter:
                 depth_header_size = 12
                 raw_data = msg.data[depth_header_size:]
 
+                depth_img_raw = cv2.imdecode(np.fromstring(raw_data, np.uint8), cv2.CV_LOAD_IMAGE_UNCHANGED)
+                if depth_img_raw is None:
+                    # probably wrong header size
+                    raise Exception("Could not decode compressed depth image."
+                                    "You may need to change 'depth_header_size'!")
+
                 if depth_fmt == "16UC1":
-                    depth_img = cv2.imdecode(np.fromstring(raw_data, np.uint8), cv2.CV_LOAD_IMAGE_UNCHANGED)
-                    if depth_img is not None:
-                        cv2.imwrite(os.path.join(path_depth, "depth_" + str(msg.header.stamp) + ".png"), depth_img)
-                    else:
-                        # probably wrong header size
-                        raise Exception("Could not decode compressed depth image."
-                                        "You may need to change 'depth_header_size'!")
-                else:
-                    # check at: image_transport_plugins/compressed_depth_image_transport/src/codec.cpp
-                    # on how to decode 32bit float images, you will need the depth quantisation
-                    # values (depthQuantA, depthQuantB) from the header for this
-                    # e.g.:
-                    # import struct
-                    # raw_header = msg.data[:depth_header_size]
+                    # write raw image data
+                    cv2.imwrite(os.path.join(path_depth, "depth_" + str(msg.header.stamp) + ".png"), depth_img_raw)
+                elif depth_fmt == "32FC1":
+                    raw_header = msg.data[:depth_header_size]
                     # header: int, float, float
-                    # [compfmt, depthQuantA, depthQuantB] = struct.unpack('iff', raw_header)
-                    raise Exception("I don't know how to decode '"+depth_fmt+"'")
+                    [compfmt, depthQuantA, depthQuantB] = struct.unpack('iff', raw_header)
+                    depth_img_scaled = depthQuantA / (depth_img_raw.astype(np.float32)-depthQuantB)
+                    # filter max values
+                    depth_img_scaled[depth_img_raw==0] = 0
+
+                    # depth_img_scaled provides distance in meters as f32
+                    # for storing it as png, we need to convert it to 16UC1 again (depth in mm)
+                    depth_img_mm = (depth_img_scaled*1000).astype(np.uint16)
+                    cv2.imwrite(os.path.join(path_depth, "depth_" + str(msg.header.stamp) + ".png"), depth_img_mm)
+                else:
+                    raise Exception("Decoding of '" + depth_fmt + "' is not implemented!")
+
 
 
     def __del__(self):
