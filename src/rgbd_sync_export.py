@@ -32,6 +32,7 @@ class RGBDExporter:
 
         self.topics = [self.topic_rgb, self.topic_depth, self.topic_joints]
 
+        bag_file_path = os.path.expanduser(bag_file_path)
         print(bag_file_path)
         self.bag = rosbag.Bag(bag_file_path, mode='r')
 
