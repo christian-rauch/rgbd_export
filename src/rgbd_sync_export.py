@@ -49,7 +49,6 @@ class RGBDExporter:
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
 
-        joint_csv = csv.writer(open(self.path_joint_values, 'w'), delimiter=' ')
         time_csv = csv.writer(open(self.path_ref_time, 'w'), delimiter=' ')
 
         # get timestamps for all messages for synchronisation
@@ -63,9 +62,14 @@ class RGBDExporter:
                 full_joint_list.update(msg.name)
             times[topic].append(msg.header.stamp)
 
-        # write joint names
-        full_joint_list_sorted = sorted(full_joint_list)
-        joint_csv.writerow(full_joint_list_sorted)
+        # remove topics with no messages
+        [(times.pop(top, None), self.topics.remove(top)) for top in times.keys() if len(times[top])==0]
+
+        if len(full_joint_list)>0:
+            joint_csv = csv.writer(open(self.path_joint_values, 'w'), delimiter=' ')
+            # write joint names
+            full_joint_list_sorted = sorted(full_joint_list)
+            joint_csv.writerow(full_joint_list_sorted)
 
         # get reference time and topic
         ref_topic = ""
