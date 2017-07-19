@@ -27,8 +27,7 @@ class RGBDExporter:
             # topic with JointState
             self.topic_joints = rospy.get_param('~topic_joints', default="/joint_states")
         except KeyError as e:
-            print(e.message+" is undefined")
-            return
+            raise UserWarning(e.message+" is undefined")
 
         self.topics = [self.topic_rgb, self.topic_depth, self.topic_joints]
 
@@ -180,7 +179,11 @@ class RGBDExporter:
 
     def __del__(self):
         # delete all private parameters
-        rospy.delete_param(rospy.get_name())
+        try:
+            rospy.delete_param(rospy.get_name())
+        except KeyError:
+            pass
+
         # close log file
         try:
             self.bag.close()
@@ -189,5 +192,9 @@ class RGBDExporter:
 
 
 if __name__ == '__main__':
-    exporter = RGBDExporter("rgbd_exporter")
+    try:
+        exporter = RGBDExporter("rgbd_exporter")
+    except UserWarning as e:
+        print(e.message)
+        exit()
     exporter.export()
