@@ -14,7 +14,7 @@ import csv
 
 class RGBDExporter:
     def __init__(self, node_name):
-        rospy.init_node(node_name)
+        rospy.init_node(node_name, anonymous=True)
 
         # read parameters
         try:
@@ -32,7 +32,7 @@ class RGBDExporter:
         self.topics = [self.topic_rgb, self.topic_depth, self.topic_joints]
 
         bag_file_path = os.path.expanduser(bag_file_path)
-        print(bag_file_path)
+        print("reading:",bag_file_path)
         self.bag = rosbag.Bag(bag_file_path, mode='r')
 
         self.export_path = os.path.expanduser(self.export_path)
@@ -43,6 +43,9 @@ class RGBDExporter:
 
     def export(self):
         print("exporting to: "+self.export_path)
+        if os.path.exists(self.export_path):
+            raise UserWarning("path "+self.export_path+" already exists!")
+
         # create export directories
         for dir_path in [self.path_colour, self.path_depth]:
             if not os.path.exists(dir_path):
@@ -194,7 +197,7 @@ class RGBDExporter:
 if __name__ == '__main__':
     try:
         exporter = RGBDExporter("rgbd_exporter")
+        exporter.export()
     except UserWarning as e:
         print(e.message)
         exit()
-    exporter.export()
