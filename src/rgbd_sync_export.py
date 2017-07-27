@@ -34,6 +34,7 @@ class RGBDExporter:
         bag_file_path = os.path.expanduser(bag_file_path)
         print("reading:",bag_file_path)
         self.bag = rosbag.Bag(bag_file_path, mode='r')
+        print("duration:", self.bag.get_end_time()-self.bag.get_start_time(),"s")
 
         self.export_path = os.path.expanduser(self.export_path)
         self.path_colour = os.path.join(self.export_path, "colour")
@@ -53,24 +54,34 @@ class RGBDExporter:
 
         time_csv = csv.writer(open(self.path_ref_time, 'w'), delimiter=' ')
 
-        # get timestamps for all messages for synchronisation
+        end_time = None
+        # for exporting subpart of log, select end time in seconds, e.g. 10 seconds from start of log
+        # end_time = rospy.Time.from_sec(self.bag.get_start_time() + 10)
+
+        # get timestamps for all messages to select reference topic with smallest amount of messages
+        # get available joint names and their oldest value, e.g. we are looking into the future and assume
+        # that the first seen joint value reflects the state of the joint before this time
         times = dict()
         for t in self.topics:
             times[t] = []
-        full_joint_list = set()
-        for topic, msg, t in self.bag.read_messages(topics=self.topics):
+        full_jnt_values = dict() # store first (oldest) joint values of complete set
+        for topic, msg, t in self.bag.read_messages(topics=self.topics, end_time=end_time):
             # get set of joints
             if topic == self.topic_joints:
-                full_joint_list.update(msg.name)
+                for ijoint in range(len(msg.name)):
+                    if msg.name[ijoint] not in full_jnt_values:
+                        full_jnt_values[msg.name[ijoint]] = msg.position[ijoint]
             times[topic].append(msg.header.stamp)
+
+        print("joints:", full_jnt_values.keys())
 
         # remove topics with no messages
         [(times.pop(top, None), self.topics.remove(top)) for top in times.keys() if len(times[top])==0]
 
-        if len(full_joint_list)>0:
+        if len(full_jnt_values.keys())>0:
             joint_csv = csv.writer(open(self.path_joint_values, 'w'), delimiter=' ')
             # write joint names
-            full_joint_list_sorted = sorted(full_joint_list)
+            full_joint_list_sorted = sorted(full_jnt_values.keys())
             joint_csv.writerow(full_joint_list_sorted)
 
         # get reference time and topic
@@ -84,21 +95,18 @@ class RGBDExporter:
 
         print("reference topic: "+ref_topic+" ("+str(min_len)+" messages)")
 
-        received_joints = dict()
-
         # sample and hold synchronisation
         sync_msg = dict()
         for top in self.topics:
             sync_msg[top] = None
         has_all_msg = False
 
-        for topic, msg, t in self.bag.read_messages(topics=self.topics):
+        for topic, msg, t in self.bag.read_messages(topics=self.topics, end_time=end_time):
             # merge all received joints
             if topic == self.topic_joints:
                 for ijoint in range(len(msg.name)):
-                    received_joints[msg.name[ijoint]] = msg.position[ijoint]
-                if set(received_joints.keys()) == full_joint_list:
-                    sync_msg[topic] = received_joints
+                    full_jnt_values[msg.name[ijoint]] = msg.position[ijoint]
+                    sync_msg[topic] = full_jnt_values
             else:
                 sync_msg[topic] = msg
 
