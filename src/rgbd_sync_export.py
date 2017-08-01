@@ -140,48 +140,56 @@ class RGBDExporter:
                         # remove white space
                         depth_fmt = depth_fmt.strip()
                         compr_type = compr_type.strip()
-                        if compr_type != "compressedDepth":
-                            raise Exception("Compression type is not 'compressedDepth'."
-                                            "You probably subscribed to the wrong topic.")
 
-                        # remove header from raw data
-                        # C header definition at:
-                        # /opt/ros/indigo/include/compressed_depth_image_transport/compression_common.h
-                        # enum compressionFormat {
-                        #   UNDEFINED = -1, INV_DEPTH
-                        # };
-                        # struct ConfigHeader {
-                        #   compressionFormat format;
-                        #   float depthParam[2];
-                        # };
-                        # header size = enum (4 byte) + float[2] (2 x 4 byte) = 12 byte
-                        # enum size may vary and needs to be adapted if decoding fails
-                        depth_header_size = 12
-                        raw_data = sync_msg[sync_topic].data[depth_header_size:]
+                        if compr_type == "compressedDepth":
+                            # remove header from raw data
+                            # C header definition at:
+                            # /opt/ros/indigo/include/compressed_depth_image_transport/compression_common.h
+                            # enum compressionFormat {
+                            #   UNDEFINED = -1, INV_DEPTH
+                            # };
+                            # struct ConfigHeader {
+                            #   compressionFormat format;
+                            #   float depthParam[2];
+                            # };
+                            # header size = enum (4 byte) + float[2] (2 x 4 byte) = 12 byte
+                            # enum size may vary and needs to be adapted if decoding fails
+                            depth_header_size = 12
+                            raw_data = sync_msg[sync_topic].data[depth_header_size:]
 
-                        depth_img_raw = cv2.imdecode(np.fromstring(raw_data, np.uint8), cv2.CV_LOAD_IMAGE_UNCHANGED)
-                        if depth_img_raw is None:
-                            # probably wrong header size
-                            raise Exception("Could not decode compressed depth image."
-                                            "You may need to change 'depth_header_size'!")
+                            depth_img_raw = cv2.imdecode(np.fromstring(raw_data, np.uint8), cv2.CV_LOAD_IMAGE_UNCHANGED)
+                            if depth_img_raw is None:
+                                # probably wrong header size
+                                raise Exception("Could not decode compressed depth image."
+                                                "You may need to change 'depth_header_size'!")
 
-                        if depth_fmt == "16UC1":
-                            # write raw image data
-                            depth_img = depth_img_raw
-                        elif depth_fmt == "32FC1":
-                            raw_header = sync_msg[sync_topic].data[:depth_header_size]
-                            # header: int, float, float
-                            [compfmt, depthQuantA, depthQuantB] = struct.unpack('iff', raw_header)
-                            depth_img_scaled = depthQuantA / (depth_img_raw.astype(np.float32) - depthQuantB)
-                            # filter max values
-                            depth_img_scaled[depth_img_raw == 0] = 0
+                            if depth_fmt == "16UC1":
+                                # write raw image data
+                                depth_img = depth_img_raw
+                            elif depth_fmt == "32FC1":
+                                raw_header = sync_msg[sync_topic].data[:depth_header_size]
+                                # header: int, float, float
+                                [compfmt, depthQuantA, depthQuantB] = struct.unpack('iff', raw_header)
+                                depth_img_scaled = depthQuantA / (depth_img_raw.astype(np.float32) - depthQuantB)
+                                # filter max values
+                                depth_img_scaled[depth_img_raw == 0] = 0
 
-                            # depth_img_scaled provides distance in meters as f32
-                            # for storing it as png, we need to convert it to 16UC1 again (depth in mm)
-                            depth_img_mm = (depth_img_scaled * 1000).astype(np.uint16)
-                            depth_img = depth_img_mm
+                                # depth_img_scaled provides distance in meters as f32
+                                # for storing it as png, we need to convert it to 16UC1 again (depth in mm)
+                                depth_img_mm = (depth_img_scaled * 1000).astype(np.uint16)
+                                depth_img = depth_img_mm
+                            else:
+                                raise Exception("Decoding of '" + depth_fmt + "' is not implemented!")
+
+                        elif compr_type == "tiff compressed":
+                            if depth_fmt == "16UC1":
+                                tiffdata = sync_msg[sync_topic].data
+                                depth_img = cv2.imdecode(np.fromstring(tiffdata, np.uint8), cv2.CV_LOAD_IMAGE_UNCHANGED)
+                            else:
+                                raise Exception("Decoding of '" + depth_fmt + "' is not implemented!")
+
                         else:
-                            raise Exception("Decoding of '" + depth_fmt + "' is not implemented!")
+                            raise Exception("Decompression of '"+compr_type+"' is not implemented")
 
                         # write image
                         cv2.imwrite(os.path.join(self.path_depth, "depth_" + str(ref_time) + ".png"), depth_img)
