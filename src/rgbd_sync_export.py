@@ -3,18 +3,22 @@
 from __future__ import print_function
 import rosbag
 import rospy
-from sensor_msgs.msg import JointState, CompressedImage
+from cv_bridge import CvBridge
 
 import os
 import numpy as np
 import cv2
 import struct
 import csv
+import socket
 
 
 class RGBDExporter:
     def __init__(self, node_name):
-        rospy.init_node(node_name, anonymous=True)
+        try:
+            rospy.init_node(node_name, anonymous=True)
+        except socket.error as e:
+            raise UserWarning("roscore not running")
 
         # read parameters
         try:
@@ -41,6 +45,8 @@ class RGBDExporter:
         self.path_depth = os.path.join(self.export_path, "depth")
         self.path_joint_values = os.path.join(self.export_path, "joints.csv")
         self.path_ref_time = os.path.join(self.export_path, "time.csv")
+
+        self.cvbridge = CvBridge()
 
     def export(self):
         print("exporting to: "+self.export_path)
@@ -130,8 +136,7 @@ class RGBDExporter:
 
                     elif sync_topic == self.topic_rgb:
                         # export RGB
-                        # http://wiki.ros.org/rospy_tutorials/Tutorials/WritingImagePublisherSubscriber
-                        colour_img = cv2.imdecode(np.fromstring(sync_msg[sync_topic].data, np.uint8), cv2.CV_LOAD_IMAGE_COLOR)
+                        colour_img = self.cvbridge.compressed_imgmsg_to_cv2(sync_msg[sync_topic])
                         cv2.imwrite(os.path.join(self.path_colour, "colour_" + str(ref_time) + ".png"), colour_img)
 
                     elif sync_topic == self.topic_depth:
@@ -181,15 +186,8 @@ class RGBDExporter:
                             else:
                                 raise Exception("Decoding of '" + depth_fmt + "' is not implemented!")
 
-                        elif compr_type == "tiff compressed":
-                            if depth_fmt == "16UC1":
-                                tiffdata = sync_msg[sync_topic].data
-                                depth_img = cv2.imdecode(np.fromstring(tiffdata, np.uint8), cv2.CV_LOAD_IMAGE_UNCHANGED)
-                            else:
-                                raise Exception("Decoding of '" + depth_fmt + "' is not implemented!")
-
                         else:
-                            raise Exception("Decompression of '"+compr_type+"' is not implemented")
+                            depth_img = self.cvbridge.compressed_imgmsg_to_cv2(sync_msg[sync_topic])
 
                         # write image
                         cv2.imwrite(os.path.join(self.path_depth, "depth_" + str(ref_time) + ".png"), depth_img)
@@ -201,6 +199,8 @@ class RGBDExporter:
         try:
             rospy.delete_param(rospy.get_name())
         except KeyError:
+            pass
+        except socket.error:
             pass
 
         # close log file
