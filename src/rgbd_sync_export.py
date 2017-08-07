@@ -184,11 +184,15 @@ class RGBDExporter:
                                 depth_img_mm = (depth_img_scaled * 1000).astype(np.uint16)
                                 depth_img = depth_img_mm
                             else:
-                                raise Exception("Decoding of '" + depth_fmt + "' is not implemented!")
+                                raise Exception("Decoding of '"+sync_msg[sync_topic].format+"' is not implemented!")
 
                         else:
-                            rawimgdata = sync_msg[sync_topic].data
-                            depth_img = cv2.imdecode(np.fromstring(rawimgdata, np.uint8), cv2.CV_LOAD_IMAGE_UNCHANGED)
+                            if depth_fmt == "16UC1":
+                                # assume that all 16bit image representations can be decoded by opencv
+                                rawimgdata = sync_msg[sync_topic].data
+                                depth_img = cv2.imdecode(np.fromstring(rawimgdata, np.uint8), cv2.CV_LOAD_IMAGE_UNCHANGED)
+                            else:
+                                raise Exception("Decoding of '" + sync_msg[sync_topic].format + "' is not implemented!")
 
                         # write image
                         cv2.imwrite(os.path.join(self.path_depth, "depth_" + str(ref_time) + ".png"), depth_img)
