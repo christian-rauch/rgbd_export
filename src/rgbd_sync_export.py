@@ -187,7 +187,8 @@ class RGBDExporter:
                                 raise Exception("Decoding of '" + depth_fmt + "' is not implemented!")
 
                         else:
-                            depth_img = self.cvbridge.compressed_imgmsg_to_cv2(sync_msg[sync_topic])
+                            rawimgdata = sync_msg[sync_topic].data
+                            depth_img = cv2.imdecode(np.fromstring(rawimgdata, np.uint8), cv2.CV_LOAD_IMAGE_UNCHANGED)
 
                         # write image
                         cv2.imwrite(os.path.join(self.path_depth, "depth_" + str(ref_time) + ".png"), depth_img)
