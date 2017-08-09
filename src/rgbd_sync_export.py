@@ -4,6 +4,7 @@ from __future__ import print_function
 import rosbag
 import rospy
 from cv_bridge import CvBridge
+from sensor_msgs.msg import Image, CompressedImage
 
 import os
 import numpy as np
@@ -136,10 +137,15 @@ class RGBDExporter:
 
                     elif sync_topic == self.topic_rgb:
                         # export RGB
-                        colour_img = self.cvbridge.compressed_imgmsg_to_cv2(sync_msg[sync_topic])
+                        if msg._type == Image._type:
+                            colour_img = self.cvbridge.imgmsg_to_cv2(sync_msg[sync_topic])
+                        elif msg._type == CompressedImage._type:
+                            colour_img = self.cvbridge.compressed_imgmsg_to_cv2(sync_msg[sync_topic])
+                        else:
+                            print("unsupported:",msg._type)
                         cv2.imwrite(os.path.join(self.path_colour, "colour_" + str(ref_time) + ".png"), colour_img)
 
-                    elif sync_topic == self.topic_depth:
+                    elif sync_topic == self.topic_depth and msg._type == CompressedImage._type:
                         # export depth
                         depth_fmt, compr_type = sync_msg[sync_topic].format.split(';')
                         # remove white space
@@ -195,6 +201,10 @@ class RGBDExporter:
                                 raise Exception("Decoding of '" + sync_msg[sync_topic].format + "' is not implemented!")
 
                         # write image
+                        cv2.imwrite(os.path.join(self.path_depth, "depth_" + str(ref_time) + ".png"), depth_img)
+
+                    elif sync_topic == self.topic_depth and msg._type == Image._type:
+                        depth_img = self.cvbridge.imgmsg_to_cv2(sync_msg[sync_topic])
                         cv2.imwrite(os.path.join(self.path_depth, "depth_" + str(ref_time) + ".png"), depth_img)
 
         print("done")
