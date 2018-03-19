@@ -80,10 +80,24 @@ class RGBDExporter:
                         full_jnt_values[msg.name[ijoint]] = msg.position[ijoint]
             times[topic].append(msg.header.stamp)
 
-        print("joints:", full_jnt_values.keys())
+        if len(times[self.topic_joints])==0:
+            print("Ignoring joint topic.")
+        else:
+            print("joints:", full_jnt_values.keys())
+
+        if len(times[self.topic_rgb])==0:
+            print("NO colour images. Check that topic '"+self.topic_rgb+"' is present in bag file!")
+        if len(times[self.topic_depth]) == 0:
+            print("NO depth images. Check that topic '"+self.topic_depth+"' is present in bag file!")
 
         # remove topics with no messages
-        [(times.pop(top, None), self.topics.remove(top)) for top in times.keys() if len(times[top])==0]
+        [times.pop(top, None) for top in times.keys() if len(times[top]) == 0]
+
+        if not times:
+            bag_topics = self.bag.get_type_and_topic_info().topics
+            print("Found no messages on any of the given topics.")
+            print("Valid topics are:", bag_topics.keys())
+            print("Given topics are:", self.topics)
 
         if len(full_jnt_values.keys())>0:
             joint_csv = csv.writer(open(self.path_joint_values, 'w'), delimiter=' ')
@@ -104,11 +118,11 @@ class RGBDExporter:
 
         # sample and hold synchronisation
         sync_msg = dict()
-        for top in self.topics:
+        for top in times.keys():
             sync_msg[top] = None
         has_all_msg = False
 
-        for topic, msg, t in self.bag.read_messages(topics=self.topics, end_time=end_time):
+        for topic, msg, t in self.bag.read_messages(topics=times.keys(), end_time=end_time):
             # merge all received joints
             if topic == self.topic_joints:
                 for ijoint in range(len(msg.name)):
