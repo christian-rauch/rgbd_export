@@ -109,8 +109,8 @@ class RGBDExporter:
         ref_topic = ""
         min_len = np.inf
         for topic in times.keys():
-            # find topic with smallest amount of messages as reference
-            if len(times[topic]) < min_len:
+            # find last topic with smallest amount of messages as reference
+            if len(times[topic]) <= min_len:
                 ref_topic = topic
                 min_len = len(times[topic])
 
