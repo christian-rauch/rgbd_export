@@ -151,8 +151,13 @@ class RGBDExporter:
 
                     elif sync_topic == self.topic_rgb:
                         # export RGB
+                        if sync_msg[sync_topic].encoding[:6]=="bayer_":
+                            desired_encoding = "bgr8"
+                        else:
+                            desired_encoding = "passthrough"
+
                         if msg._type == Image._type:
-                            colour_img = self.cvbridge.imgmsg_to_cv2(sync_msg[sync_topic])
+                            colour_img = self.cvbridge.imgmsg_to_cv2(sync_msg[sync_topic], desired_encoding=desired_encoding)
                         elif msg._type == CompressedImage._type:
                             colour_img = self.cvbridge.compressed_imgmsg_to_cv2(sync_msg[sync_topic])
                         else:
