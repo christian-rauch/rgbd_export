@@ -186,7 +186,7 @@ class RGBDExporter:
                             depth_header_size = 12
                             raw_data = sync_msg[sync_topic].data[depth_header_size:]
 
-                            depth_img_raw = cv2.imdecode(np.fromstring(raw_data, np.uint8), cv2.CV_LOAD_IMAGE_UNCHANGED)
+                            depth_img_raw = cv2.imdecode(np.fromstring(raw_data, np.uint8), cv2.IMREAD_UNCHANGED)
                             if depth_img_raw is None:
                                 # probably wrong header size
                                 raise Exception("Could not decode compressed depth image."
@@ -214,7 +214,7 @@ class RGBDExporter:
                             if depth_fmt == "16UC1":
                                 # assume that all 16bit image representations can be decoded by opencv
                                 rawimgdata = sync_msg[sync_topic].data
-                                depth_img = cv2.imdecode(np.fromstring(rawimgdata, np.uint8), cv2.CV_LOAD_IMAGE_UNCHANGED)
+                                depth_img = cv2.imdecode(np.fromstring(rawimgdata, np.uint8), cv2.IMREAD_UNCHANGED)
                             else:
                                 raise Exception("Decoding of '" + sync_msg[sync_topic].format + "' is not implemented!")
 
