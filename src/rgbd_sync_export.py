@@ -2,7 +2,6 @@
 
 from __future__ import print_function
 import rosbag
-import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, CompressedImage
 
@@ -11,28 +10,29 @@ import numpy as np
 import cv2
 import struct
 import csv
-import socket
+
+import argparse
 
 
 class RGBDExporter:
-    def __init__(self, node_name):
-        try:
-            rospy.init_node(node_name, anonymous=True)
-        except socket.error as e:
-            raise UserWarning("roscore not running")
+    def __init__(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument("bag_file", type=str, help="path to rosbag file")
+        parser.add_argument("export_dir", type=str, help="path to export folder")
+        parser.add_argument("--topic_rgb", type=str, default="/camera/rgb/image_rect_color/compressed", help="colour topic (CompressedImage)")
+        parser.add_argument("--topic_depth", type=str, default="/camera/depth/image_rect_raw/compressedDepth", help="depth topic (CompressedImage)")
+        parser.add_argument("--topic_joints", type=str, default="/joint_states", help="joint state topic (JointState)")
 
-        # read parameters
-        try:
-            # input/output paths
-            bag_file_path = rospy.get_param('~bag_file')
-            self.export_path = rospy.get_param('~export_dir')
-            # image topics with CompressedImage
-            self.topic_rgb = rospy.get_param('~topic_rgb', default="/camera/rgb/image_rect_color/compressed")
-            self.topic_depth = rospy.get_param('~topic_depth', default="/camera/depth/image_rect_raw/compressedDepth")
-            # topic with JointState
-            self.topic_joints = rospy.get_param('~topic_joints', default="/joint_states")
-        except KeyError as e:
-            raise UserWarning(e.message+" is undefined")
+        args = parser.parse_args()
+
+        # input/output paths
+        bag_file_path = args.bag_file
+        self.export_path = args.export_dir
+        # image topics with CompressedImage
+        self.topic_rgb = args.topic_rgb
+        self.topic_depth = args.topic_depth
+        # topic with JointState
+        self.topic_joints = args.topic_joints
 
         self.topics = [self.topic_rgb, self.topic_depth, self.topic_joints]
 
@@ -228,25 +228,10 @@ class RGBDExporter:
         print("done")
 
     def __del__(self):
-        # delete all private parameters
-        try:
-            rospy.delete_param(rospy.get_name())
-        except KeyError:
-            pass
-        except socket.error:
-            pass
-
         # close log file
-        try:
+        if hasattr(self, 'bag'):
             self.bag.close()
-        except AttributeError:
-            pass
 
 
 if __name__ == '__main__':
-    try:
-        exporter = RGBDExporter("rgbd_exporter")
-        exporter.export()
-    except UserWarning as e:
-        print(e.message)
-        exit()
+    RGBDExporter().export()

@@ -39,7 +39,7 @@
   <!-- Use test_depend for packages you need only for testing: -->
   <!--   <test_depend>gtest</test_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
-  <run_depend>rospy</run_depend>
+  <run_depend>rosbag</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>opencv2</run_depend>
   <run_depend>cv_bridge</run_depend>
