@@ -10,6 +10,7 @@ import numpy as np
 import cv2
 import struct
 import csv
+import json
 
 import argparse
 
@@ -21,6 +22,7 @@ class RGBDExporter:
         parser.add_argument("export_dir", type=str, help="path to export folder")
         parser.add_argument("--topic_rgb", type=str, default="/camera/rgb/image_rect_color/compressed", help="colour topic (CompressedImage)")
         parser.add_argument("--topic_depth", type=str, default="/camera/depth/image_rect_raw/compressedDepth", help="depth topic (CompressedImage)")
+        parser.add_argument("--topic_camera_info", type=str, default="/camera/rgb/camera_info", help="camera info topic (CameraInfo)")
         parser.add_argument("--topic_joints", type=str, default="/joint_states", help="joint state topic (JointState)")
 
         args = parser.parse_args()
@@ -31,10 +33,12 @@ class RGBDExporter:
         # image topics with CompressedImage
         self.topic_rgb = args.topic_rgb
         self.topic_depth = args.topic_depth
+        # camera intrinsics with CameraInfo
+        self.topic_ci = args.topic_camera_info
         # topic with JointState
         self.topic_joints = args.topic_joints
 
-        self.topics = [self.topic_rgb, self.topic_depth, self.topic_joints]
+        self.topics = [self.topic_rgb, self.topic_depth, self.topic_ci, self.topic_joints]
 
         bag_file_path = os.path.expanduser(bag_file_path)
         print("reading:",bag_file_path)
@@ -121,6 +125,14 @@ class RGBDExporter:
         for top in times.keys():
             sync_msg[top] = None
         has_all_msg = False
+
+        for topic, msg, t in self.bag.read_messages(topics=[self.topic_ci], end_time=end_time):
+            # export a single camera info message
+            cp = {'cx': msg.K[2], 'cy': msg.K[5], 'fu': msg.K[0], 'fv': msg.K[4],
+                  'width': msg.width, 'height': msg.height}
+            with open(os.path.join(self.export_path, "camera_parameters.json"), 'w') as f:
+                json.dump(cp, f, indent=4, separators=(',', ': '), sort_keys=True)
+            break
 
         for topic, msg, t in self.bag.read_messages(topics=times.keys(), end_time=end_time):
             # merge all received joints
