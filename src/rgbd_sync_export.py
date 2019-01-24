@@ -24,12 +24,17 @@ class RGBDExporter:
         parser.add_argument("--topic_depth", type=str, default="/camera/depth/image_rect_raw/compressedDepth", help="depth topic (CompressedImage)")
         parser.add_argument("--topic_camera_info", type=str, default="/camera/rgb/camera_info", help="camera info topic (CameraInfo)")
         parser.add_argument("--topic_joints", type=str, default="/joint_states", help="joint state topic (JointState)")
+        parser.add_argument("-f", "--force", action="store_true", help="overwrite old data")
 
         args = parser.parse_args()
 
         # input/output paths
         bag_file_path = args.bag_file
         self.export_path = args.export_dir
+
+        if os.path.exists(self.export_path) and not args.force:
+            raise UserWarning("path "+self.export_path+" already exists!")
+
         # image topics with CompressedImage
         self.topic_rgb = args.topic_rgb
         self.topic_depth = args.topic_depth
@@ -41,7 +46,7 @@ class RGBDExporter:
         self.topics = [self.topic_rgb, self.topic_depth, self.topic_ci, self.topic_joints]
 
         bag_file_path = os.path.expanduser(bag_file_path)
-        print("reading:",bag_file_path)
+        print("reading:", bag_file_path)
         self.bag = rosbag.Bag(bag_file_path, mode='r')
         print("duration:", self.bag.get_end_time()-self.bag.get_start_time(),"s")
 
@@ -55,8 +60,6 @@ class RGBDExporter:
 
     def export(self):
         print("exporting to: "+self.export_path)
-        if os.path.exists(self.export_path):
-            raise UserWarning("path "+self.export_path+" already exists!")
 
         # create export directories
         for dir_path in [self.path_colour, self.path_depth]:
