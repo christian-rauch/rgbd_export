@@ -4,12 +4,13 @@ from __future__ import print_function
 import rosbag
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, CompressedImage
+import tf2_ros
+import genpy
 
 import os
 import numpy as np
 import cv2
 import struct
-import csv
 import json
 
 import argparse
@@ -43,6 +44,8 @@ class RGBDExporter:
         # topic with JointState
         self.topic_joints = args.topic_joints
 
+        self.topics_tf = ["/tf", "/tf_static"]
+
         self.topics = [self.topic_rgb, self.topic_depth, self.topic_ci, self.topic_joints]
 
         bag_file_path = os.path.expanduser(bag_file_path)
@@ -53,8 +56,6 @@ class RGBDExporter:
         self.export_path = os.path.expanduser(self.export_path)
         self.path_colour = os.path.join(self.export_path, "colour")
         self.path_depth = os.path.join(self.export_path, "depth")
-        self.path_joint_values = os.path.join(self.export_path, "joints.csv")
-        self.path_ref_time = os.path.join(self.export_path, "time.csv")
 
         self.cvbridge = CvBridge()
 
@@ -66,95 +67,115 @@ class RGBDExporter:
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
 
-        time_csv = csv.writer(open(self.path_ref_time, 'w'), delimiter=' ')
+        ref_times = []
 
-        end_time = None
-        # for exporting subpart of log, select end time in seconds, e.g. 10 seconds from start of log
-        # end_time = rospy.Time.from_sec(self.bag.get_start_time() + 10)
+        # fill the tf buffer
+        # maximum duration to cache all transformations
+        # https://github.com/ros/geometry2/issues/356
+        time_max = genpy.Duration(secs=pow(2, 31) - 1)
+        tf_buffer = tf2_ros.Buffer(cache_time=time_max)
+        for topic, msg, t in self.bag.read_messages(topics=self.topics_tf):
+            for transf in msg.transforms:
+                tf_buffer.set_transform(transf, "exporter")
 
         # get timestamps for all messages to select reference topic with smallest amount of messages
         # get available joint names and their oldest value, e.g. we are looking into the future and assume
         # that the first seen joint value reflects the state of the joint before this time
-        times = dict()
+        topic_times = dict()
         for t in self.topics:
-            times[t] = []
+            topic_times[t] = []
         full_jnt_values = dict() # store first (oldest) joint values of complete set
-        for topic, msg, t in self.bag.read_messages(topics=self.topics, end_time=end_time):
+        for topic, msg, t in self.bag.read_messages(topics=self.topics):
             # get set of joints
             if topic == self.topic_joints:
                 for ijoint in range(len(msg.name)):
                     if msg.name[ijoint] not in full_jnt_values:
                         full_jnt_values[msg.name[ijoint]] = msg.position[ijoint]
-            times[topic].append(msg.header.stamp)
+            topic_times[topic].append(msg.header.stamp)
 
-        if len(times[self.topic_joints])==0:
+        if len(topic_times[self.topic_joints])==0:
             print("Ignoring joint topic.")
         else:
             print("joints:", full_jnt_values.keys())
 
-        if len(times[self.topic_rgb])==0:
+        if len(topic_times[self.topic_rgb])==0:
             print("NO colour images. Check that topic '"+self.topic_rgb+"' is present in bag file!")
-        if len(times[self.topic_depth]) == 0:
+        if len(topic_times[self.topic_depth]) == 0:
             print("NO depth images. Check that topic '"+self.topic_depth+"' is present in bag file!")
 
         # remove topics with no messages
-        [times.pop(top, None) for top in times.keys() if len(times[top]) == 0]
+        [topic_times.pop(top, None) for top in topic_times.keys() if len(topic_times[top]) == 0]
 
-        if not times:
+        if not topic_times:
             bag_topics = self.bag.get_type_and_topic_info().topics
             print("Found no messages on any of the given topics.")
             print("Valid topics are:", bag_topics.keys())
             print("Given topics are:", self.topics)
 
-        if len(full_jnt_values.keys())>0:
-            joint_csv = csv.writer(open(self.path_joint_values, 'w'), delimiter=' ')
-            # write joint names
-            full_joint_list_sorted = sorted(full_jnt_values.keys())
-            joint_csv.writerow(full_joint_list_sorted)
+        full_joint_list_sorted = sorted(full_jnt_values.keys())
+        joint_states = []
+        camera_poses = []
 
         # get reference time and topic
         ref_topic = ""
         min_len = np.inf
-        for topic in times.keys():
+        for topic in topic_times.keys():
             # find last topic with smallest amount of messages as reference
-            if len(times[topic]) <= min_len:
+            if len(topic_times[topic]) <= min_len:
                 ref_topic = topic
-                min_len = len(times[topic])
+                min_len = len(topic_times[topic])
 
         print("reference topic: "+ref_topic+" ("+str(min_len)+" messages)")
 
         # sample and hold synchronisation
         sync_msg = dict()
-        for top in times.keys():
+        for top in topic_times.keys():
             sync_msg[top] = None
         has_all_msg = False
 
-        for topic, msg, t in self.bag.read_messages(topics=[self.topic_ci], end_time=end_time):
+        camera_info = None
+        for topic, msg, t in self.bag.read_messages(topics=[self.topic_ci]):
             # export a single camera info message
+            camera_info = msg
             cp = {'cx': msg.K[2], 'cy': msg.K[5], 'fu': msg.K[0], 'fv': msg.K[4],
                   'width': msg.width, 'height': msg.height}
             with open(os.path.join(self.export_path, "camera_parameters.json"), 'w') as f:
                 json.dump(cp, f, indent=4, separators=(',', ': '), sort_keys=True)
             break
 
-        for topic, msg, t in self.bag.read_messages(topics=times.keys(), end_time=end_time):
-            # merge all received joints
+        if camera_info is None:
+            raise Exception("No CameraInfo message received!")
+
+        for topic, msg, t in self.bag.read_messages(topics=topic_times.keys()):
             if topic == self.topic_joints:
+                # merge all received joints
                 for ijoint in range(len(msg.name)):
                     full_jnt_values[msg.name[ijoint]] = msg.position[ijoint]
                     sync_msg[topic] = full_jnt_values
             else:
+                # keep the newest message
                 sync_msg[topic] = msg
 
             # export at occurrence of reference message and if all remaining messages have been received
-            # e.g. we export the reference message and the newest messages of other topics
+            # e.g. we export the reference message and the newest messages of other topics (sample and hold)
             if topic==ref_topic and (has_all_msg or all([v is not None for v in sync_msg.values()])):
                 # faster evaluation of previous statement
                 has_all_msg = True
 
                 # export
                 ref_time = msg.header.stamp
-                time_csv.writerow([ref_time])
+                ref_times.append(ref_time.to_nsec())
+
+                # get transformations
+                try:
+                    camera_pose = tf_buffer.lookup_transform(
+                        target_frame="world_frame", source_frame=camera_info.header.frame_id,
+                        time=ref_time)
+                    p = camera_pose.transform.translation
+                    q = camera_pose.transform.rotation
+                    camera_poses.append([p.x, p.y, p.z, q.w, q.x, q.y, q.z])
+                except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                    pass
 
                 for sync_topic in sync_msg.keys():
                     if sync_topic == self.topic_joints:
@@ -162,7 +183,7 @@ class RGBDExporter:
                         jvalues = []
                         for jname in full_joint_list_sorted:
                             jvalues.append(sync_msg[sync_topic][jname])
-                        joint_csv.writerow(jvalues)
+                        joint_states.append(jvalues)
 
                     elif sync_topic == self.topic_rgb:
                         # export RGB
@@ -239,6 +260,14 @@ class RGBDExporter:
                     elif sync_topic == self.topic_depth and msg._type == Image._type:
                         depth_img = self.cvbridge.imgmsg_to_cv2(sync_msg[sync_topic])
                         cv2.imwrite(os.path.join(self.path_depth, "depth_" + str(ref_time) + ".png"), depth_img)
+
+        np.savetxt(os.path.join(self.export_path, "time.csv"), ref_times, fmt="%i")
+
+        np.savetxt(os.path.join(self.export_path, "camera_pose.csv"), camera_poses,
+                   fmt="%.8f", header="px py pz qw qx qy qz", delimiter=" ", comments="")
+
+        np.savetxt(os.path.join(self.export_path, "joints.csv"), joint_states,
+                   fmt="%.8f", header=(" ").join(full_joint_list_sorted), delimiter=" ", comments="")
 
         print("done")
 
