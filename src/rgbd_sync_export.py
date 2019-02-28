@@ -26,6 +26,7 @@ class RGBDExporter:
         parser.add_argument("--topic_camera_info", type=str, default="/camera/rgb/camera_info", help="camera info topic (CameraInfo)")
         parser.add_argument("--topic_joints", type=str, default="/joint_states", help="joint state topic (JointState)")
         parser.add_argument("-f", "--force", action="store_true", help="overwrite old data")
+        parser.add_argument("-b", "--reference_frame", type=str, default="base", help="parent frame of camera pose")
 
         args = parser.parse_args()
 
@@ -47,6 +48,8 @@ class RGBDExporter:
         self.topics_tf = ["/tf", "/tf_static"]
 
         self.topics = [self.topic_rgb, self.topic_depth, self.topic_ci, self.topic_joints]
+
+        self.ref_frame = args.reference_frame
 
         bag_file_path = os.path.expanduser(bag_file_path)
         print("reading:", bag_file_path)
@@ -169,7 +172,7 @@ class RGBDExporter:
                 # get transformations
                 try:
                     camera_pose = tf_buffer.lookup_transform(
-                        target_frame="world_frame", source_frame=camera_info.header.frame_id,
+                        target_frame=self.ref_frame, source_frame=camera_info.header.frame_id,
                         time=ref_time)
                     p = camera_pose.transform.translation
                     q = camera_pose.transform.rotation
