@@ -119,16 +119,7 @@ class RGBDExporter:
         joint_states = []
         camera_poses = []
 
-        # get reference time and topic
-        ref_topic = ""
-        min_len = np.inf
-        for topic in topic_times.keys():
-            # find last topic with smallest amount of messages as reference
-            if len(topic_times[topic]) <= min_len:
-                ref_topic = topic
-                min_len = len(topic_times[topic])
-
-        print("reference topic: "+ref_topic+" ("+str(min_len)+" messages)")
+        ref_topic = self.topic_rgb
 
         # sample and hold synchronisation
         sync_msg = dict()
