@@ -257,11 +257,15 @@ class RGBDExporter:
 
         np.savetxt(os.path.join(self.export_path, "time.csv"), ref_times, fmt="%i")
 
-        np.savetxt(os.path.join(self.export_path, "camera_pose.csv"), camera_poses,
-                   fmt="%.8f", header="px py pz qw qx qy qz", delimiter=" ", comments="")
+        if len(camera_poses)>0:
+            np.savetxt(os.path.join(self.export_path, "camera_pose.csv"), camera_poses,
+                       fmt="%.8f", header="px py pz qw qx qy qz", delimiter=" ", comments="")
+        else:
+            print("No camera poses have been extracted. Make sure that the given reference frame '" + self.ref_frame + "' exists.")
 
-        np.savetxt(os.path.join(self.export_path, "joints.csv"), joint_states,
-                   fmt="%.8f", header=(" ").join(full_joint_list_sorted), delimiter=" ", comments="")
+        if len(joint_states)>0:
+            np.savetxt(os.path.join(self.export_path, "joints.csv"), joint_states,
+                       fmt="%.8f", header=(" ").join(full_joint_list_sorted), delimiter=" ", comments="")
 
         print("done")
 
