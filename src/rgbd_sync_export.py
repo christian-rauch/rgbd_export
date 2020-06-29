@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-
-from __future__ import print_function
+#!/usr/bin/env python3
 import rosbag
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, CompressedImage
@@ -76,7 +74,7 @@ class RGBDExporter:
         # maximum duration to cache all transformations
         # https://github.com/ros/geometry2/issues/356
         time_max = genpy.Duration(secs=pow(2, 31) - 1)
-        tf_buffer = tf2_ros.Buffer(cache_time=time_max)
+        tf_buffer = tf2_ros.Buffer(cache_time=time_max, debug=False)
         for topic, msg, t in self.bag.read_messages(topics=self.topics_tf):
             for transf in msg.transforms:
                 tf_buffer.set_transform(transf, "exporter")
@@ -107,7 +105,7 @@ class RGBDExporter:
             print("NO depth images. Check that topic '"+self.topic_depth+"' is present in bag file!")
 
         # remove topics with no messages
-        [topic_times.pop(top, None) for top in topic_times.keys() if len(topic_times[top]) == 0]
+        [topic_times.pop(top, None) for top in list(topic_times.keys()) if len(topic_times[top]) == 0]
 
         if not topic_times:
             bag_topics = self.bag.get_type_and_topic_info().topics
@@ -216,7 +214,7 @@ class RGBDExporter:
                             depth_header_size = 12
                             raw_data = sync_msg[sync_topic].data[depth_header_size:]
 
-                            depth_img_raw = cv2.imdecode(np.fromstring(raw_data, np.uint8), cv2.IMREAD_UNCHANGED)
+                            depth_img_raw = cv2.imdecode(np.frombuffer(raw_data, np.uint8), cv2.IMREAD_UNCHANGED)
                             if depth_img_raw is None:
                                 # probably wrong header size
                                 raise Exception("Could not decode compressed depth image."
@@ -244,7 +242,7 @@ class RGBDExporter:
                             if depth_fmt == "16UC1":
                                 # assume that all 16bit image representations can be decoded by opencv
                                 rawimgdata = sync_msg[sync_topic].data
-                                depth_img = cv2.imdecode(np.fromstring(rawimgdata, np.uint8), cv2.IMREAD_UNCHANGED)
+                                depth_img = cv2.imdecode(np.frombuffer(rawimgdata, np.uint8), cv2.IMREAD_UNCHANGED)
                             else:
                                 raise Exception("Decoding of '" + sync_msg[sync_topic].format + "' is not implemented!")
 
