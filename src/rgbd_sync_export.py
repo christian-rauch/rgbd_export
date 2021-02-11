@@ -191,19 +191,19 @@ class RGBDExporter:
 
                     elif sync_topic == self.topic_rgb:
                         # export RGB
-                        if msg._type == Image._type:
+                        if sync_msg[sync_topic]._type == Image._type:
                             if sync_msg[sync_topic].encoding[:6] == "bayer_":
                                 desired_encoding = "bgr8"
                             else:
                                 desired_encoding = "passthrough"
                             colour_img = self.cvbridge.imgmsg_to_cv2(sync_msg[sync_topic], desired_encoding=desired_encoding)
-                        elif msg._type == CompressedImage._type:
+                        elif sync_msg[sync_topic]._type == CompressedImage._type:
                             colour_img = self.cvbridge.compressed_imgmsg_to_cv2(sync_msg[sync_topic])
                         else:
-                            print("unsupported:",msg._type)
+                            print("unsupported:",sync_msg[sync_topic]._type)
                         cv2.imwrite(os.path.join(self.path_colour, "colour_" + str(ref_time) + ".png"), colour_img)
 
-                    elif sync_topic == self.topic_depth and msg._type == CompressedImage._type:
+                    elif sync_topic == self.topic_depth and sync_msg[sync_topic]._type == CompressedImage._type:
                         # export depth
                         depth_fmt, compr_type = sync_msg[sync_topic].format.split(';')
                         # remove white space
@@ -261,7 +261,7 @@ class RGBDExporter:
                         # write image
                         cv2.imwrite(os.path.join(self.path_depth, "depth_" + str(ref_time) + ".png"), depth_img)
 
-                    elif sync_topic == self.topic_depth and msg._type == Image._type:
+                    elif sync_topic == self.topic_depth and sync_msg[sync_topic]._type == Image._type:
                         depth_img = self.cvbridge.imgmsg_to_cv2(sync_msg[sync_topic])
                         cv2.imwrite(os.path.join(self.path_depth, "depth_" + str(ref_time) + ".png"), depth_img)
 
