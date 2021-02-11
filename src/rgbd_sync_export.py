@@ -2,6 +2,7 @@
 import rosbag
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, CompressedImage
+from geometry_msgs.msg import TransformStamped
 import tf2_ros
 import genpy
 
@@ -77,7 +78,18 @@ class RGBDExporter:
         tf_buffer = tf2_ros.Buffer(cache_time=time_max, debug=False)
         for topic, msg, t in self.bag.read_messages(topics=self.topics_tf):
             for transf in msg.transforms:
-                tf_buffer.set_transform(transf, "exporter")
+                # convert to geometry_msgs/TransformStamped
+                bag_msg = TransformStamped()
+                bag_msg.header = transf.header
+                bag_msg.child_frame_id = transf.child_frame_id
+                bag_msg.transform.translation.x = transf.transform.translation.x
+                bag_msg.transform.translation.y = transf.transform.translation.y
+                bag_msg.transform.translation.z = transf.transform.translation.z
+                bag_msg.transform.rotation.w = transf.transform.rotation.w
+                bag_msg.transform.rotation.x = transf.transform.rotation.x
+                bag_msg.transform.rotation.y = transf.transform.rotation.y
+                bag_msg.transform.rotation.z = transf.transform.rotation.z
+                tf_buffer.set_transform(bag_msg, "exporter")
 
         # get timestamps for all messages to select reference topic with smallest amount of messages
         # get available joint names and their oldest value, e.g. we are looking into the future and assume
