@@ -21,7 +21,7 @@ class RGBDExporter:
         parser.add_argument("bag_file", type=str, help="path to rosbag file")
         parser.add_argument("export_dir", type=str, help="path to export folder")
         parser.add_argument("--topic_rgb", type=str, default="/camera/rgb/image_rect_color/compressed", help="colour topic (CompressedImage)")
-        parser.add_argument("--topic_depth", type=str, default="/camera/depth/image_rect_raw/compressedDepth", help="depth topic (CompressedImage)")
+        parser.add_argument("--topic_depth", type=str, default="/camera/depth/image_rect_raw/compressed", help="depth topic (CompressedImage)")
         parser.add_argument("--topic_camera_info", type=str, default="/camera/rgb/camera_info", help="camera info topic (CameraInfo)")
         parser.add_argument("--topic_joints", type=str, default="/joint_states", help="joint state topic (JointState)")
         parser.add_argument("-f", "--force", action="store_true", help="overwrite old data")
